@@ -2,8 +2,8 @@ import tkinter as tk
 
 # Sample boilerplate code snippets
 BOILERPLATE_CODE = {
-    "if statement": "if condition: \n "+"    " ,
-    "for loop": "for item in items: \n" +"    ",
+    "if statement": "if condition: \n "+"    ",
+    "for loop": "for item in items: \n" + "    ",
     "function": "def my_function(arg1, arg2): \n" + "    ",
     "imports": "import tkinter as tk \n" + "    ",
 }
