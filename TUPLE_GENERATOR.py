@@ -1,5 +1,5 @@
 import tkinter as tk
-from tkinter import ttk, filedialog
+from tkinter import ttk, filedialog, scrolledtext
 import random
 
 def generate_random_tuples():
@@ -9,7 +9,7 @@ def generate_random_tuples():
     end_range = int(end_range_entry.get())
 
     result = [tuple(random.randint(start_range, end_range) for _ in range(tuple_size)) for _ in range(n)]
-    result_text.set(str(result))
+    result_text.insert("1.0", str(result))
     return result
 
 def save_to_file():
@@ -19,6 +19,10 @@ def save_to_file():
         with open(filename, 'w') as f:
             for t in tuples:
                 f.write(str(t) + "\n")
+def copy_to_clipboard():
+    app.clipboard_clear()
+    app.clipboard_append(result_text.get('1.0', tk.END))
+
 
 app = tk.Tk()
 app.title("Random Tuple Generator")
@@ -60,7 +64,9 @@ save_btn.grid(column=0, row=5, columnspan=2, pady=10)
 
 # Result display
 result_text = tk.StringVar()
-result_label = ttk.Label(frame, textvariable=result_text)
-result_label.grid(column=0, row=6, columnspan=2, pady=5)
 
+result_text = scrolledtext.ScrolledText(frame, height=10, width=50)
+result_text.grid(column=0, row=6, columnspan=2, pady=5)
+copy_btn = ttk.Button(frame, text="Copy to Clipboard", command=copy_to_clipboard)
+copy_btn.grid(column=0, row=7, columnspan=2, pady=10)
 app.mainloop()
