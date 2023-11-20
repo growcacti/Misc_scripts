@@ -721,67 +721,59 @@ class MenuBar(tk.Menu):
         self.info1.update_info()
         self.info2.update_info()
         self.info3.update_info()
-            
+                
 
     def makedirlist(self):
         self.path = os.getcwd()
         self.flist = os.listdir(self.path)
         self.dirpath.delete(0, END)
         self.dirpath.insert(END, self.path)
-       
-        for self.item in self.flist:
-            if self.item.endswith(".py" or ".txt"):
-                self.lb.insert(tk.END, self.item)
 
-                self.lb.focus()
+        for item in self.flist:
+            if item.endswith((".py", ".txt")):
+                self.lb.insert(END, item)
+        self.lb.focus()
+
     def newdirlist(self):
         self.path = askdirectory()
         os.chdir(self.path)
         self.flist = os.listdir(self.path)
-        self.lb.delete(0, tk.END)
+        self.lb.delete(0, END)
         self.dirpath.delete(0, END)
-        self.flist = os.listdir(self.path)
-       
-        self.dirpath.insert(END, self.path)
-        for self.item in self.flist:
-           if self.item.endswith(".py") or self.item.endswith(".txt"):
-               self.lb.delete(0, tk.END)
-               self.lb.insert(tk.END, self.item)
-               self.lb.focus()
-               return self.path, self.flist                
-
-
+        
+        self.dirpath.insert(0, self.path)
+        for item in self.flist:
+            if item.endswith(".py") or item.endswith(".txt"):
+                self.lb.insert(END, item)
+        self.lb.focus()
+        return self.path, self.flist
 
     def listing(self, event=None):
         self.flist = os.listdir(self.path)
         self.dirpath.delete(0, END)
-        self.dirpath.insert(INSERT, self.path)
+        self.dirpath.insert(0, self.path)
 
-        for self.item in self.flist:
-            if self.item.endswith(".py" or ".txt"):
-                self.lb.insert(tk.END, self.item)
+        for item in self.flist:
+            if item.endswith((".py", ".txt")):
+                self.lb.insert(END, item)
+        self.lb.focus()
 
-                self.lb.focus()
-
-        
-        if event:
-            x = int(self.lb.curselection()[0]) if self.lb.curselection() else None
-        else:
-            # No event, use the first item as default or handle no selection
-            x = 0 if self.lb.size() > 0 else None
+        x = int(self.lb.curselection()[0]) if self.lb.curselection() else None if event else 0 if self.lb.size() > 0 else None
         if x is not None:
-            file = self.lb.get(x)
-            with open(file, "r") as file:
-                content = file.read()
+            try:
+                with open(self.lb.get(x), "r") as file:
+                    content = file.read()
+                    self.tx.delete("1.0", tk.END)
+                    self.tx.insert(tk.END, content)
+            except Exception as e:
                 self.tx.delete("1.0", tk.END)
-                self.tx.insert(tk.END, content)
+                self.tx.insert(tk.END, f"Error opening file: {e}")
         else:
             self.tx.delete("1.0", tk.END)
             self.tx.insert(tk.END, "Please select a file to display its content.")
 
-                      
 
-   
+       
 
     def showcontent(self, x, event=None):
         for i in self.lb.curselection():
