@@ -1,11 +1,13 @@
 import tkinter as tk
-from tkinter import filedialog
+from tkinter import filedialog, messagebox
+import os
+import re
 
 class TextToListConverter:
     def __init__(self, root):
         self.root = root
         self.root.title("Text to Lists Converter")
-
+        self.last_directory = os.getcwd()  # Initialize last_directory
         self.setup_widgets()
 
     def setup_widgets(self):
@@ -14,60 +16,84 @@ class TextToListConverter:
 
         convert_button_lines = tk.Button(self.root, text="Lines to list", command=self.text_to_line_list)
         convert_button_lines.grid(row=1, column=0, padx=5, pady=5, sticky="ew")
-        btn= tk.Button(self.root, text="", command=None)
-        btn.grid(row=2,column=0)
+
+        clear_list_button = tk.Button(self.root, text="Clear Lists", command=self.clear_list)
+        clear_list_button.grid(row=2, column=0)
+
         self.listbox_lines = tk.Listbox(self.root, width=25, height=10)
         self.listbox_lines.grid(row=4, column=0, columnspan=2, padx=5, pady=5)
+
+        self.listbox_words = tk.Listbox(self.root, width=25, height=10)
+        self.listbox_words.grid(row=4, column=2, columnspan=2, padx=5, pady=5)
 
         save_button_lines = tk.Button(self.root, text="Save Line List", command=self.save_line_list)
         save_button_lines.grid(row=3, column=0, columnspan=2, padx=5, pady=5, sticky="ew")
 
         convert_button_words = tk.Button(self.root, text="Convert Text to Word List", command=self.text_to_word_list)
         convert_button_words.grid(row=1, column=2, padx=5, pady=5, sticky="ew")
-        
-        btn2= tk.Button(self.root, text="add quotes", command=self.add_qouteslist)
-        btn2.grid(row=2,column=2)
-        self.listbox_words = tk.Listbox(self.root, width=25, height=10)
-        self.listbox_words.grid(row=4, column=2, columnspan=2, padx=5, pady=5)
+
+        add_quotes_button = tk.Button(self.root, text="Add Quotes", command=self.add_quotes_to_word_list)
+        add_quotes_button.grid(row=2, column=2)
+
+        load_text_button = tk.Button(self.root, text="Load Text", command=self.load_text_file)
+        load_text_button.grid(row=1, column=3, padx=5, pady=5, sticky="ew")
 
         save_button_words = tk.Button(self.root, text="Save Word List", command=self.save_word_list)
         save_button_words.grid(row=3, column=2, columnspan=2, padx=5, pady=5, sticky="ew")
-        
+
         for i in range(4):
             self.root.grid_columnconfigure(i, weight=1)
 
+    def clear_list(self):
+        """Clears all items from the listboxes."""
+        self.listbox_lines.delete(0, tk.END)
+        self.listbox_words.delete(0, tk.END)
+
+    def text_to_word_list(self):
+        """Converts text in the text widget to a list of words and displays it in the listbox."""
+        self.listbox_words.delete(0, tk.END)
+        words = set(self.text_widget.get("1.0", tk.END).strip().split())
+        for word in sorted(words):
+            self.listbox_words.insert(tk.END, word)
+
     def text_to_line_list(self):
+        """Converts text in the text widget to a list of lines and displays it in the listbox."""
         self.listbox_lines.delete(0, tk.END)
         text_contents = self.text_widget.get("1.0", tk.END).strip().split('\n')
         for item in text_contents:
             self.listbox_lines.insert(tk.END, item)
 
-    def text_to_word_list(self):
+    def add_quotes_to_word_list(self):
+        """Adds quotes to each word in the word list."""
+        words_with_quotes = [f'"{self.listbox_words.get(idx)}"' for idx in range(self.listbox_words.size())]
         self.listbox_words.delete(0, tk.END)
-        words = self.text_widget.get("1.0", tk.END).strip().split()
-        seen = set()
-        ordered_unique_words = [seen.add(word) or word for word in words if word not in seen]
-        for word in ordered_unique_words:
+        for word in words_with_quotes:
             self.listbox_words.insert(tk.END, word)
 
+    def load_text_file(self):
+        """Loads text from a file into the text widget."""
+        file_path = filedialog.askopenfilename(initialdir=self.last_directory, title="Select text file", filetypes=(("Text files", "*.txt"), ("All files", "*.*")))
+        if file_path:
+            try:
+                with open(file_path, "r") as file:
+                    text_content = file.read()
+                self.text_widget.delete("1.0", tk.END)  # Clear existing text
+                self.text_widget.insert("1.0", text_content)  # Insert new text
+                self.last_directory = os.path.dirname(file_path)  # Update last directory
+            except Exception as e:
+                messagebox.showerror("Error", f"Failed to load text: {e}")
+
     def save_line_list(self):
+        """Saves the lines list to a file."""
         lines = [self.listbox_lines.get(idx) for idx in range(self.listbox_lines.size())]
         filepath = filedialog.asksaveasfilename(defaultextension="txt")
         if filepath:
             with open(filepath, 'w') as file:
                 for line in lines:
                     file.write(line + '\n')
-    def add_qouteslist (self):
-        self.listbox_lines.delete(0, tk.END)
-        words = self.text_widget.get("1.0", tk.END).strip().split()
-        seen = set()
-        ordered_unique_words = [seen.add(word) or word for word in words if word not in seen]
-        for word in ordered_unique_words:
-            quoted_word = f'"{word}"'  # Add quotes around the word
-            self.listbox_words.insert(tk.END, quoted_word)
 
-        
     def save_word_list(self):
+        """Saves the words list to a file."""
         words = [self.listbox_words.get(idx) for idx in range(self.listbox_words.size())]
         filepath = filedialog.asksaveasfilename(defaultextension="txt")
         if filepath:
@@ -79,3 +105,4 @@ if __name__ == "__main__":
     root = tk.Tk()
     app = TextToListConverter(root)
     root.mainloop()
+
