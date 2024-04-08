@@ -31,7 +31,7 @@ root.title("Entry to Dictionary")
 # Create a frame
 frame = tk.Frame(root, width =1200 , height =800)
 frame.grid(row=0, column=0)
-savnac = tk.Canvas(frame, bg="aquamarine2")
+savnac = tk.Canvas(frame, bg="skyblue2")
 savnac.grid(row=1, column=1)
 
 # Entry widgets
