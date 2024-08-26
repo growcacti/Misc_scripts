@@ -1,0 +1,1225 @@
+from config import *
+from enemy import *
+from itertools import cycle
+from os import path
+from other_sprites import *
+from player import *
+from pygame import font
+from pygame import sprite
+from random import choice, randint
+from random import uniform, choice, randint, random
+from tiledmap import *
+import os
+import pygame as pg
+import pytmx
+import random
+import sys
+
+
+
+vec = pg.math.Vector2
+
+
+class Player(sprite.Sprite):
+    def __init__(self, game, px, py):
+        super().__init__()
+
+        self.sheet = pg.image.load("img/player99.png").convert_alpha()
+        self.original = pg.image.load("img/player99.png").convert_alpha()
+        self.size = (16, 18)
+        self.frames_down = self.strip(self.sheet, (0, 36), self.size, 3)
+        self.frames_up = self.strip(self.sheet, (0, 0), self.size, 3)
+        self.frames_left = self.strip(self.sheet, (0, 54), self.size, 3)
+        self.frames_right = self.strip(self.sheet, (0, 18), self.size, 3)
+
+        self.frame_index = 0
+
+        self.animation_speed = 1  # Milliseconds per frame
+        self.last_update = 0
+        self.last_direction = (0, -1)
+        self.image = self.frames_down[self.frame_index]
+        self.rect = self.image.get_rect()
+        self.rect.topleft = (px, py)
+        self.pos = vec(px, py)
+        self.vel = vec(0, 0)
+        self.velocity = self.vel
+        self.hit_rect = self.rect
+        self.game = game
+        self.font = pg.font.Font
+        self.last_shot = 0
+        self.health = PLAYER_HEALTH
+        self.facing = None
+        self.start = (1, 1)
+        self.direction = vec(0, 0)
+        self.score = 0
+        self.max_health = PLAYER_HEALTH
+        self.health = self.max_health
+        self.health_bar = HealthBar(self)
+        self.angle = 270
+        self.fsize = (16, 18)
+
+    def strip(self, sheet, start, size, columns, rows=1):
+        self.frames = []
+        for j in range(rows):
+            for i in range(columns):
+                location = (start[0] + size[0] * i, start[1] + size[1] * j)
+                self.frames.append(sheet.subsurface(pg.Rect(location, size)))
+        return self.frames
+
+    def rotate_image(self, angle):
+        """Rotates the current player frame and sets it as the player's image."""
+        center = self.rect.center
+        self.image = pg.transform.rotate(self.original, angle)
+        self.rect = self.image.get_rect()
+        self.rect.center = center
+
+    def animate(self):
+        now = pg.time.get_ticks()
+        if now - self.last_update > self.animation_speed:
+            self.last_update = now
+            if self.vel == vec(0, 0):
+                self.frame_index = 0
+                self.last_direction = self.facing
+            else:
+                if self.last_direction == DIRECT_DICT["LEFT"]:
+                    self.frames = self.frames_left
+                elif self.last_direction == DIRECT_DICT["RIGHT"]:
+                    self.frames = self.frames_right
+                elif self.last_direction == DIRECT_DICT["UP"]:
+                    self.frames = self.frames_up
+                elif self.last_direction == DIRECT_DICT["DOWN"]:
+                    self.frames = self.frames_down
+
+                self.frame_index = (self.frame_index + 1) % len(self.frames)
+                # Store unrotated frame
+                self.original = self.frames[self.frame_index]
+                self.rotate_image(self.angle)  # Rotate the frame
+
+    def attack(self):
+        now = pg.time.get_ticks()
+        if now - self.last_update > self.animation_speed:
+            self.last_update = now
+            if self.vel == vec(0, 0):
+                self.frame_index = 0
+                self.last_direction = self.facing
+                self.frame_index = (self.frame_index + 1) % len(self.frames)
+
+    def get_keys(self):
+        self.vel = vec(0, 0)
+        keys = pg.key.get_pressed()
+        if keys[pg.K_LEFT] or keys[pg.K_a]:
+            self.start = [0, 54]
+            self.strip(self.sheet, self.start, self.size, 3)
+            self.facing = DIRECT_DICT["LEFT"]
+            self.angle = 180
+            self.vel.x = -PLAYER_SPEED
+        elif keys[pg.K_RIGHT] or keys[pg.K_d]:
+            self.start = [0, 18]
+            self.strip(self.sheet, self.start, self.size, 3)
+            self.facing = DIRECT_DICT["RIGHT"]
+            self.angle = 0
+            self.vel.x = PLAYER_SPEED
+        elif keys[pg.K_UP] or keys[pg.K_w]:
+            self.start = [0, 0]
+            self.strip(self.sheet, self.start, self.size, 3)
+            self.facing = DIRECT_DICT["UP"]
+            self.angle = 90
+            self.vel.y = -PLAYER_SPEED
+        elif keys[pg.K_DOWN] or keys[pg.K_s]:
+            self.start = [0, 36]
+            self.strip(self.sheet, self.start, self.size, 3)
+            self.facing = DIRECT_DICT["DOWN"]
+            self.angle = 270
+            self.vel.y = PLAYER_SPEED
+
+        if self.vel != vec(0, 0):
+            self.last_direction = self.facing  # Update the last direction
+
+    def get_direction(self):
+        if self.vel.x > 0:
+            self.start = [0, 18]
+            self.facing = DIRECT_DICT["RIGHT"]
+            self.direction = vec(1, 0)
+            self.angle = 0
+            return self.facing, self.direction, self.angle
+
+        elif self.vel.x < 0:
+            self.start = [0, 54]
+            self.facing = DIRECT_DICT["LEFT"]
+            self.direction = vec(-1, 0)
+            self.angle = 180
+            return self.facing, self.direction, self.angle
+        elif self.vel.y < 0:
+            self.start = [0, 0]
+            self.facing = DIRECT_DICT["UP"]
+            self.direction = vec(0, -1)
+            self.angle = 90
+            return self.facing, self.direction, self.angle
+        elif self.vel.y > 0:
+            self.start = [0, 36]
+            self.facing = DIRECT_DICT["DOWN"]
+            self.direction = vec(0, 1)
+            self.angle = 270
+            return self.facing, self.direction, self.angle
+        else:
+            return self.facing, self.direction, self.angle
+
+    def fire_spell(self, angle):
+
+        self.angle = angle
+        self.facing, self.direction, self.angle = self.get_direction()
+        self.health -= 1
+        if self.angle == 0:
+            self.start = [0, 18]
+
+            self.game.screen.blit(self.image, self.game.camera.apply(self))
+
+            spell = Spell(
+                self.game,
+                self.rect.centerx,
+                self.rect.centery,
+                self.facing,
+                self.direction,
+                self.angle,
+            )  # Pass self.facing instead of direction
+        elif self.angle == 180:
+            self.start = [0, 54]
+            
+            self.game.screen.blit(self.image, self.game.camera.apply(self))
+            spell = Spell(
+                self.game,
+                self.rect.centerx,
+                self.rect.centery,
+                self.facing,
+                self.direction,
+                self.angle,
+            )  # Pass self.facing instead of direction
+        elif self.angle == 90:
+            self.start = [0, 0]
+
+            self.game.screen.blit(self.image, self.game.camera.apply(self))
+            spell = Spell(
+                self.game,
+                self.rect.centerx,
+                self.rect.centery,
+                self.facing,
+                self.direction,
+                self.angle,
+            )  # Pass self.facing instead of direction
+        elif self.angle == 270:
+            self.start = [0, 36]
+            self.game.screen.blit(self.image, self.game.camera.apply(self))
+            spell = Spell(
+                self.game,
+                self.rect.centerx,
+                self.rect.centery,
+                self.facing,
+                self.direction,
+                self.angle,
+            )  # Pass self.facing instead of direction
+
+        # self.game.spells.add(spell)
+
+        self.game.all_sprites.add(spell)
+        self.game.spells.add(spell)
+
+    def update(self):
+        self.health_bar.update()
+        self.get_keys()
+        self.animate()
+        self.pos += self.vel * self.game.dt
+        self.rect.center = self.pos
+
+        self.rect.center = self.pos
+
+        self.hit_rect.center = self.rect.center
+        spell_hits = pg.sprite.spritecollide(
+            self, self.game.enemies, True
+        )  # Check for spell-enemy collisions
+        for enemy in spell_hits:
+            self.score += 1  # Increase the score when an enemy is hit
+
+    def draw(self):
+        self.game.screen.blit(self.image, self.game.camera.apply(self))
+        self.health_bar.draw(self.game.screen)
+
+
+class Spell(pg.sprite.Sprite):
+    def __init__(self, game, x, y, facing, direction, angle):
+        self.groups = game.all_sprites
+        pg.sprite.Sprite.__init__(self, self.groups)
+        self.game = game
+        self.surf = pg.Surface((16, 18)).convert_alpha()
+        self.sheet = pg.image.load("img/force.png").convert_alpha()
+        self.size = (16, 18)
+        self.frames_down = self.strip(self.sheet, (0, 36), self.size, 3)
+        self.frames_up = self.strip(self.sheet, (0, 0), self.size, 3)
+        self.frames_left = self.strip(self.sheet, (0, 54), self.size, 3)
+        self.frames_right = self.strip(self.sheet, (0, 18), self.size, 3)
+        self.frame_iter = cycle(
+            self.get_frames(angle)
+        )  # Create an iterator for cycling frames
+        self.image = next(self.frame_iter)  # Get the first frame
+        self.rect = pg.Rect(self.image.get_rect())
+        self.last_update = 0
+        self.rect.center = (x, y)
+        self.pos = vec(x, y)
+        self.animation_speed = 2
+        self.direction = direction
+        self.facing = facing
+        self.angle = angle
+
+    def strip(self, sheet, start, size, columns, rows=1):
+        frames = []
+        for j in range(rows):
+            for i in range(columns):
+                location = (start[0] + size[0] * i, start[1] + size[1] * j)
+                frames.append(sheet.subsurface(pg.Rect(location, size)))
+        return frames
+
+    def get_frames(self, angle):
+        if angle == 90:
+            return self.frames_up
+        elif angle == 270:
+            return self.frames_down
+        elif angle == 180:
+            return self.frames_left
+        elif angle == 0:
+            return self.frames_right
+
+    def animate(self):
+        now = pg.time.get_ticks()
+        if now - self.last_update > self.animation_speed:
+            self.last_update = now
+            self.image = next(self.frame_iter)
+
+    def update(self):
+        self.animate()
+        if self.angle == 90:
+            # Up
+            self.rect.centery -= SPELL_SPEED
+        elif self.angle == 270:
+            # Down
+            self.rect.centery += SPELL_SPEED
+        elif self.angle == 180:
+            # Left
+            self.rect.centerx -= SPELL_SPEED
+        elif self.angle == 0:
+            # Right
+            self.rect.centerx += SPELL_SPEED
+        # Remove the spell when it goes off the screen
+        if (
+            self.rect.left < 0
+            or self.rect.right > self.game.map.width
+            or self.rect.top < 0
+            or self.rect.bottom > self.game.map.height
+        ):
+            self.kill()
+
+    def draw(self):
+        pass
+
+
+class HealthBar:
+    def __init__(self, player):
+        self.player = player
+        self.image = pg.Surface((100, 20))
+        self.image.fill((0, 0, 255))  # Adjust the size as needed
+        self.rect = self.image.get_rect()
+        # Position the health bar in the top left corner
+        self.rect.topleft = (20, 20)
+        self.max_width = self.rect.width
+
+    def update(self):
+        # Calculate the width of the health bar based on the player's health
+        health_ratio = self.player.health / self.player.max_health
+        self.rect.width = int(self.max_width * health_ratio)
+
+    def draw(self, screen):
+        pg.draw.rect(screen, (0, 0, 255), self.rect)  # blue health bar
+
+
+
+class Obstacle(pg.sprite.Sprite):
+    def __init__(self, game, x, y, w, h):
+        self.groups = game.walls
+        pg.sprite.Sprite.__init__(self, self.groups)
+        self.game = game
+
+        self.rect = pg.Rect(x, y, w, h)
+        self.hit_rect = self.rect
+        self.x = x
+        self.y = y
+        self.rect.x = x
+        self.rect.y = y
+
+class Off_Road(pg.sprite.Sprite):
+    def __init__(self, game, x, y, w, h):
+        self.groups = game.walls
+        pg.sprite.Sprite.__init__(self, self.groups)
+        self.game = game
+
+        self.rect = pg.Rect(x, y, w, h)
+        self.hit_rect = self.rect
+        self.x = x/2
+        self.y = y/2
+        self.rect.x = x
+        self.rect.y = y
+
+class Health(pg.sprite.Sprite):
+    def __init__(self, game, x, y, w, h):
+        self.groups = game.walls
+        pg.sprite.Sprite.__init__(self, self.groups)
+        self.game = game
+
+        self.rect = pg.Rect(x, y, w, h)
+        self.hit_rect = self.rect
+        self.x = x
+        self.y = y
+        self.rect.x = x
+        self.rect.y = y
+
+
+class Item(pg.sprite.Sprite):
+    def __init__(self, game, x, y, w, h):
+        self.groups = game.walls
+        pg.sprite.Sprite.__init__(self, self.groups)
+        self.game = game
+
+        self.rect = pg.Rect(x, y, w, h)
+        self.hit_rect = self.rect
+        self.x = x
+        self.y = y
+        self.rect.x = x
+        self.rect.y = y
+
+
+class Portal(pg.sprite.Sprite):
+    def __init__(self, game, x, y, w, h, map_filename):
+        self.groups = game.walls
+        pg.sprite.Sprite.__init__(self, self.groups)
+        self.game = game
+        self.image = pg.Surface((32, 32))
+        self.rect = pg.Rect(x, y, w, h)
+        self.hit_rect = self.rect
+        self.x = x
+        self.y = y
+        self.rect.x = x
+        self.rect.y = y
+
+        self.hit_rect = self.rect
+        self.map_filename = map_filename
+
+    def collide_with_player(self):
+        self.game.load_map(self.map_filename)
+
+
+class Game:
+    def __init__(self):
+        pg.init()
+        self.all_sprites = pg.sprite.Group()
+        self.screen = pg.display.set_mode((WIDTH, HEIGHT))
+
+        self.player = Player(self, 0, 0)
+        self.spells = pg.sprite.Group()
+
+        self.clock = pg.time.Clock()
+        self.load_data()
+        # Create a font object for the score
+        self.score_font = pg.font.Font(None, 28)
+
+    def load_data(self):
+        game_folder = path.dirname(__file__)
+        path.join(game_folder, "img")
+        map_folder = path.join(game_folder, "maps")
+        # Replace with your map file
+        map_filename = path.join(map_folder, "road1.tmx")
+        # Create an instance of TiledMap with the map filename
+        self.map = TiledMap(map_filename)
+        self.map_img = self.map.make_map()
+        self.map_rect = self.map_img.get_rect()
+        self.enemies = pg.sprite.Group()
+
+        self.health_objects = pg.sprite.Group()
+
+    def load_map(self, map_filename):
+
+        self.map = TiledMap(map_filename)
+        self.map_img = self.map.make_map()
+        self.map_rect = self.map_img.get_rect()
+        self.portals.empty()  # Clear the portals group
+        self.all_sprites.empty()
+        self.player_layer = self.map.tmxdata.get_layer_by_name('player')
+        for obj in self.player_layer:
+            if obj.name == 'player':
+                self.player = Player(self, obj.x, obj.y)
+                self.all_sprites.add(self.player)
+        for tile_object in self.map.tmxdata.objects:
+
+            if tile_object.name == "n":
+                self.nme = Enemy(self, tile_object.x, tile_object.y)
+                self.enemies.add(self.nme)
+            elif tile_object.name == "n2":
+                self.nme2 = Nme2(self, tile_object.x, tile_object.y)
+                self.enemies.add(self.nme2)
+            elif tile_object.name == "health":
+                self.health_obj = Health(
+                    self,
+                    tile_object.x,
+                    tile_object.y,
+                    tile_object.width,
+                    tile_object.height,
+                )
+                self.health_objects.add(self.health_obj)
+            elif tile_object.name == "w":
+                Obstacle(
+                    self,
+                    tile_object.x,
+                    tile_object.y,
+                    tile_object.width,
+                    tile_object.height,
+                )
+            elif tile_object.name == "portal":
+                game_folder = path.dirname(__file__)
+
+                map_folder = path.join(game_folder, "maps")
+                map_filename = path.join(map_folder, "road1.tmx")
+                portal = Portal(
+                    self,
+                    tile_object.x,
+                    tile_object.y,
+                    tile_object.width,
+                    tile_object.height,
+                    map_filename
+
+                )
+                self.portals.add(portal)
+                self.all_sprites.add(portal)
+
+        self.camera = Camera(self.map.width, self.map.height)
+
+    def new(self):
+        # initialize all variables and do all the setup for a new game
+        self.all_sprites = pg.sprite.Group()
+        self.walls = pg.sprite.Group()
+        self.health_obj = pg.sprite.Group()
+         
+        self.portals = pg.sprite.Group()
+        self.enemies.empty()
+        self.spells.empty()
+        self.load_map("maps/road.tmx")
+        self.draw_debug = False
+        self.offroad = 0
+        for tile_object in self.map.tmxdata.objects:
+
+            if tile_object.name == "n":
+                self.nme = Enemy(self, tile_object.x, tile_object.y)
+                self.enemies.add(self.nme)
+
+            if tile_object.name == "n2":
+                self.nme2 = Nme2(self, tile_object.x, tile_object.y)
+                self.enemies.add(self.nme2)
+
+
+
+            if tile_object.name == "w":
+                Obstacle(
+                    self,
+                    tile_object.x,
+                    tile_object.y,
+                    tile_object.width,
+                    tile_object.height,
+                )
+                self.wall_img = tile_object.name
+            if tile_object.name == "port":
+                Obstacle(
+                    self,
+                    tile_object.x,
+                    tile_object.y,
+                    tile_object.width,
+                    tile_object.height,
+                )
+                self.wall_img = tile_object.name
+        self.camera = Camera(self.map.width, self.map.height)
+        self.draw_debug = False
+
+    def draw(self):
+        pg.display.set_caption(
+            "Player Position: ({0}, {1})".format(
+                int(self.player.pos[0]), int(self.player.pos[1])
+            )
+        )
+
+        self.screen.blit(self.map_img, self.camera.apply_rect(self.map_rect))
+        self.screen.blit(player.image, self.camera.apply(player))
+
+        for sprite in self.all_sprites:
+
+            self.screen.blit(sprite.image, self.camera.apply(sprite))
+            if self.draw_debug:
+                pg.draw.rect(
+                    self.screen, CYAN, self.camera.apply_rect(
+                        sprite.hit_rect), 1
+                )
+        if self.draw_debug:
+            for wall in self.walls:
+                pg.draw.rect(
+                    self.screen,
+                    CYAN,
+                    self.camera.apply_rect(
+                        wall.rect),
+                    1)
+
+        if self.draw_debug:
+            for wall in self.walls:
+                pg.draw.rect(
+                    self.screen,
+                    CYAN,
+                    self.camera.apply_rect(
+                        wall.rect),
+                    1)
+
+        score_text = self.score_font.render(
+            "Score: {}".format((self.player.score)), True, CYAN
+        )
+        score_rect = score_text.get_rect()
+        score_rect.topright = SCORE_POSITION
+        self.screen.blit(score_text, score_rect)
+        self.player.health_bar.draw(self.screen)
+        pg.display.flip()
+
+    def run(self):
+        # game loop - set self.playing = False to end the game
+        loop = True
+        while loop:
+
+            self.dt = self.clock.tick(FPS) / 1000.0  # fix for Python 2.x
+            self.events()
+            self.update()
+            self.draw()
+
+    def quit(self):
+        pg.quit()
+        loop = False
+        sys.exit()
+
+    def update(self):
+        self.camera.update(self.player)
+        self.camera.update(self.player)
+
+        self.all_sprites.update()
+        # self.camera.update_map(self.player) #not working
+
+        # Check for collisions between player and walls
+        player_collisions = pg.sprite.spritecollide(
+            self.player, self.walls, False)
+        if player_collisions:
+            # Adjust player's position to avoid the walls
+            self.player.pos -= self.player.vel * self.dt
+
+        # Check for collisions between player and health objects
+        player_health_collisions = pg.sprite.spritecollide(
+            self.player, self.health_objects, True
+        )
+        if player_health_collisions:
+            self.player.health += 100
+            self.health_objects.kill()
+
+        # Check for collisions between player and enemies
+        spell_hits = pg.sprite.spritecollide(self.player, self.enemies, True)
+        if spell_hits:
+            self.player.score += 1
+            self.player.score += len(spell_hits)
+
+        for enemy in self.enemies:
+            enemy_collisions = pg.sprite.spritecollide(
+                enemy, self.walls, False)
+            if enemy_collisions:
+                # Adjust enemy's position to avoid the walls
+                enemy.pos -= enemy.vel * self.dt
+
+        self.spells.update()
+        # self.missile.update()
+        spell_hits = pg.sprite.spritecollide(self.player, self.enemies, True)
+        if spell_hits:
+            self.player.score += 1
+            self.player.score += len(nme)
+
+        hits = pg.sprite.groupcollide(self.enemies, self.spells, True, True)
+        for self.nme in hits:
+            # Increase the player's score
+            self.player.score += 1
+            # Remove the enemy sprite from groups and kill it
+            self.nme.kill()
+        if self.nme and pg.sprite.collide_rect(self.player, self.nme):
+            self.player.health -= (
+                10  # Decrease health by 1 if player collides with the nme
+            )
+            self.player.health_bar.update()
+        nme_collisions = pg.sprite.spritecollide(
+            self.player, self.enemies, False)
+        if nme_collisions:
+            self.player.health -= 10  # Decrease health by 1 for each nme collision
+            self.player.health_bar.update()
+
+        player_health_collisions = pg.sprite.spritecollide(
+            self.player, self.health_objects, True
+        )
+        if player_health_collisions:
+            self.player.health += (
+                10  # Increase the player's health when colliding with a health object
+            )
+        portal_collisions = pg.sprite.spritecollide(
+            self.player, self.portals, False)
+        if portal_collisions:
+            portal_collisions[0].collide_with_player()
+
+    def draw(self):
+        pg.display.set_caption(
+            "Player Position: ({0}, {1})".format(
+                int(self.player.pos[0]), int(self.player.pos[1])
+            )
+        )
+
+        self.screen.blit(self.map_img, self.camera.apply_rect(self.map_rect))
+
+        for sprite in self.all_sprites:
+
+            self.screen.blit(sprite.image, self.camera.apply(sprite))
+            if self.draw_debug:
+                pg.draw.rect(
+                    self.screen, CYAN, self.camera.apply_rect(
+                        sprite.hit_rect), 1
+                )
+        if self.draw_debug:
+            for wall in self.walls:
+                pg.draw.rect(
+                    self.screen,
+                    CYAN,
+                    self.camera.apply_rect(
+                        wall.rect),
+                    1)
+
+        if self.draw_debug:
+            for wall in self.walls:
+                pg.draw.rect(
+                    self.screen,
+                    CYAN,
+                    self.camera.apply_rect(
+                        wall.rect),
+                    1)
+
+        # for spell in self.spells:
+        # self.screen.blit(spell.image, self.camera.apply(spell))
+
+        score_text = self.score_font.render(
+            "Score: {}".format((self.player.score)), True, CYAN
+        )
+        score_rect = score_text.get_rect()
+        score_rect.topright = SCORE_POSITION
+        self.screen.blit(score_text, score_rect)
+        self.player.health_bar.draw(self.screen)
+        self.player.draw()
+        pg.display.flip()
+
+    def events(self):
+        # catch all events here
+        for event in pg.event.get():
+            if event.type == pg.QUIT:
+                self.quit()
+            if event.type == pg.KEYDOWN:
+                if event.key == pg.K_ESCAPE:
+                    self.quit()
+                if event.key == pg.K_h:
+                    self.draw_debug = not self.draw_debug
+                elif event.type == pg.KEYDOWN:
+                    if event.key == pg.K_SPACE:
+                        spell = Spell(
+                            self,
+                            self.player.rect.centerx,
+                            self.player.rect.centery,
+                            self.player.direction,
+                            self.player.facing,
+                            self.player.angle,
+                        )
+                        self.player.fire_spell(self.player.angle)
+
+
+# create the game object
+g = Game()
+
+while True:
+    g.new()
+    g.run()
+
+
+class Map:
+    def __init__(self, filename):
+        self.current_map = filename
+
+        tm = pytmx.load_pygame(filename, pixelalpha=True)
+        self.width = tm.width * tm.tilewidth
+        self.height = tm.height * tm.tileheight
+        self.tmxdata = tm
+        self.camera = Camera(self.width, self.height)
+
+        self.ti = self.tmxdata.get_tile_image_by_gid
+        self.tl = self.tmxdata.get_layer_by_name('player')
+
+        for layer in self.tmxdata.visible_layers:
+            if isinstance(layer, pytmx.TiledTileLayer):
+                for x, y, gid in layer:
+                    tile = self.ti(gid)
+                    if tile:
+                        self.make_map()
+
+    def render(self, surface):
+        self.ti = self.tmxdata.get_tile_image_by_gid
+        for layer in self.tmxdata.visible_layers:
+            if isinstance(layer, pytmx.TiledTileLayer):
+                for x, y, gid in layer:
+                    tile = self.ti(gid)
+                    if tile:
+                        surface.blit(tile, (x * self.tmxdata.tilewidth,
+                                            y * self.tmxdata.tileheight),
+                                     area=self.camera.apply_rect(tile.get_rect()))
+
+    def make_map(self):
+        temp_surface = pg.Surface((self.width, self.height))
+        self.render(temp_surface)
+        return temp_surface
+
+
+class TiledMap:
+    def __init__(self, filename):
+        tm = pytmx.load_pygame(filename, pixelalpha=True)
+        self.width = tm.width * tm.tilewidth
+        self.height = tm.height * tm.tileheight
+        self.tmxdata = tm
+        self.camera = Camera(self.width, self.height)
+
+    def render(self, surface):
+        ti = self.tmxdata.get_tile_image_by_gid
+        for layer in self.tmxdata.visible_layers:
+            if isinstance(layer, pytmx.TiledTileLayer):
+                for x, y, gid in layer:
+                    tile = ti(gid)
+                    if tile:
+                        surface.blit(tile, (x * self.tmxdata.tilewidth,
+                                            y * self.tmxdata.tileheight),
+                                     area=self.camera.apply_rect(tile.get_rect()))
+
+    def make_map(self):
+        temp_surface = pg.Surface((self.width, self.height))
+        self.render(temp_surface)
+        return temp_surface
+
+
+class Camera:
+    def __init__(self, width, height):
+        self.camera = pg.Rect(0, 0, width, height)
+        self.width = width
+        self.height = height
+
+    def apply(self, entity):
+        return entity.rect.move(self.camera.topleft)
+
+    def apply_rect(self, rect):
+        return rect.move(self.camera.topleft)
+
+    def update(self, target):
+        x = -target.rect.centerx + int(WIDTH / 2)
+        y = -target.rect.centery + int(HEIGHT / 2)
+
+        # limit scrolling to map size
+# x = min(0, x)  # left
+# y = min(0, y)  # top
+# x = max(-(self.width - WIDTH), x)  # right
+# y = max(-(self.height - HEIGHT), y)  # bottom
+        self.camera = pg.Rect(x, y, self.width, self.height)
+
+    def update_map(self, player):
+        player_pos = player.rect.center
+        map_width = self.width / TILESIZE
+        map_height = self.height / TILESIZE
+
+# Check if the player is near the edge of the current map
+# if player_pos[0] < 0:
+# Load the map to the left
+# new_map = Map("maps/left.tmx")
+# new_x = new_map.width - TILESIZE
+# new_y = player_pos[1]
+# elif player_pos[0] > self.width:
+# Load the map to the right
+# new_map = Map("maps/right.tmx")
+# new_x = TILESIZE
+# new_y = player_pos[1]
+# elif player_pos[1] < 0:
+# Load the map above
+# new_map = Map("maps/top.tmx")
+# new_x = player_pos[0]
+# new_y = new_map.height - TILESIZE
+# elif player_pos[1] > self.height:
+# Load the map below
+# new_map = Map("maps/bottom.tmx")
+# new_x = player_pos[0]
+# new_y = TILESIZE
+# else:
+# The player is not near the edge of the current map
+# return
+
+        # Update the camera and the current map
+        self.camera.topleft = (new_x - int(WIDTH / 2), new_y - int(HEIGHT / 2))
+        self.width = new_map.width
+        self.height = new_map.height
+        self.current_map = new_map.current_map
+vec = pg.math.Vector2
+
+
+WHITE = (255, 255, 255)
+CYAN = (0, 255, 255)
+YELLOW = (255, 255, 0)
+DIRECT_DICT = {"UP": (0, -1), "RIGHT": (1, 0), "DOWN": (0, 1), "LEFT": (-1, 0)}
+
+
+DIRECTIONS = (
+    "UP",
+    "RIGHT",
+    "DOWN",
+    "LEFT",
+    "UPRIGHT",
+    "UPLEFT",
+    "DOWNRIGHT",
+    "DOWNLEFT")
+
+
+CONTROLS = {
+    pg.K_UP: "UP",
+    pg.K_RIGHT: "RIGHT",
+    pg.K_DOWN: "DOWN",
+    pg.K_LEFT: "LEFT"}
+
+NME_DICT = {"UP": (0, -1), "RIGHT": (1, 0), "DOWN": (0, 1), "LEFT": (-1, 0), "UPRIGHT": (1, -1),
+            "DOWNRIGHT": (1, 1), "UPLEFT": (-1, -1), "DOWNLEFT": (-1, 1)}
+
+nme_img_dict = {"img1": "img/1a.png", "img2": "img/1b.png"}
+# Game settings
+WIDTH = 1024
+HEIGHT = 768
+FPS = 30
+TITLE = "wor"
+
+
+TILESIZE = 128
+GRIDWIDTH = WIDTH // TILESIZE
+GRIDHEIGHT = HEIGHT // TILESIZE
+MISSILE_SPEED = 20
+SPELL_SPEED = 20
+
+# Player settings
+PLAYER_HEALTH = 100
+PLAYER_SPEED = 500
+PLAYER_ROT_SPEED = 200
+PLAYER_IMG = "img/player.png"
+PLAYER_HIT_RECT = pg.Rect(0, 0, 35, 35)
+# Position of the score text (top right corner)
+SCORE_POSITION = (WIDTH - 10, 10)
+
+
+#
+# Mob settings
+key, value = random.choice(list(nme_img_dict.items()))
+nme_img = value
+NME_SPEED = 50
+NME_HIT_RECT = pg.Rect(0, 0, 35, 35)
+NME_HEALTH = 100
+NME2_SPEED = 50
+NME2_HIT_RECT = pg.Rect(0, 0, 35, 35)
+NME2_HEALTH = 100
+LERP_FACTOR = 0.0001
+minimum_distance = 250
+
+maximum_distance = 25000
+
+vec = pg.math.Vector2
+MAX_MISSILE_SHOTS = 100
+FIRE_COOLDOWN = 1
+
+
+class Enemy(pg.sprite.Sprite):
+    def __init__(self, game, px, py):
+        self.groups = game.all_sprites
+        pg.sprite.Sprite.__init__(self, self.groups)
+        self.sheet = pg.image.load("img/1a.png").convert_alpha()
+        self.size = (16, 18)
+        self.frames = self.strip(self.sheet, (0, 36), self.size, 3)
+        self.frame_index = 0
+        self.image = self.frames[self.frame_index]
+        # Add the last_direction attribute
+        self.last_direction = NME_DICT["DOWN"]
+        self.rect = self.image.get_rect()
+        self.animation_speed = 200  # Milliseconds per frame
+        self.last_update = 0
+        self.pos = vec(px, py)
+        self.vel = vec(0, 0)
+        self.hit_rect = self.rect
+        self.game = game
+        self.health = NME_HEALTH
+        self.direction = vec(0, 0)
+
+    # Rest of the code...
+
+    def strip(self, sheet, start, size, columns, rows=1):
+        self.frames = []
+        for j in range(rows):
+            for i in range(columns):
+                location = (start[0] + size[0] * i, start[1] + size[1] * j)
+                self.frames.append(sheet.subsurface(pg.Rect(location, size)))
+        return self.frames
+
+    def animate(self):
+        now = pg.time.get_ticks()
+        if now - self.last_update > self.animation_speed:
+            self.last_update = now
+            self.frame_index = (self.frame_index + 1) % len(self.frames)
+        self.image = self.frames[self.frame_index]
+
+    def move_away_from_player(self):
+        player_pos = self.game.player.pos
+        self.direction = self.pos - player_pos  # Reversing the subtraction here
+        if self.direction.length_squared() > 0:
+            self.direction.normalize_ip()
+
+        self.vel = self.direction * NME_SPEED
+
+        # Update last_direction based on movement direction
+        if abs(self.direction.x) > abs(self.direction.y):
+            if self.direction.x > 0:
+                self.last_direction = NME_DICT["RIGHT"]
+            else:
+                self.last_direction = NME_DICT["LEFT"]
+        elif abs(self.direction.x) < abs(self.direction.y):
+            if self.direction.y > 0:
+                self.last_direction = NME_DICT["DOWN"]
+            else:
+                self.last_direction = NME_DICT["UP"]
+
+    def update(self):
+        self.rect.center = self.pos
+        self.move_away_from_player()
+        self.animate()
+        self.pos += self.vel * self.game.dt
+        self.rect.center = self.pos
+        self.hit_rect.center = self.rect.center
+        self.get_move()  # Call the get_move method to update the direction
+
+        spell_hits = pg.sprite.spritecollide(self, self.game.spells, True)
+        for spell in spell_hits:
+            # Increase the player's score
+            self.game.player.score += 1
+            # Remove the enemy sprite from groups and kill it
+            self.kill()
+
+    def get_move(self):
+        if abs(self.direction.x) > abs(self.direction.y):
+            if self.direction.x > 0:
+                self.last_direction = NME_DICT["RIGHT"]
+                self.frames = self.strip(self.sheet, (0, 18), self.size, 3)
+                self.vel.x = NME_SPEED
+            else:
+                self.last_direction = NME_DICT["LEFT"]
+                self.frames = self.strip(self.sheet, (0, 54), self.size, 3)
+                self.vel.x = -NME_SPEED
+        else:
+            if self.direction.y > 0:
+                self.last_direction = NME_DICT["DOWN"]
+                self.frames = self.strip(self.sheet, (0, 36), self.size, 3)
+                self.vel.y = NME_SPEED
+            else:
+                self.last_direction = NME_DICT["UP"]
+                self.frames = self.strip(self.sheet, (0, 0), self.size, 3)
+                self.vel.y = -NME_SPEED
+
+    def draw(self):
+        self.game.screen.blit(self.image, self.game.camera.apply(self))
+
+
+class Nme2(pg.sprite.Sprite):
+    def __init__(self, game, px, py):
+        self.groups = game.all_sprites
+        pg.sprite.Sprite.__init__(self, self.groups)
+        self.sheet = pg.image.load("img/nme2.png").convert_alpha()
+        self.size = (15, 18)
+        self.frames_down = self.strip(self.sheet, (0, 35), self.size, 3)
+        self.frames_up = self.strip(self.sheet, (0, 0), self.size, 3)
+        self.frames_left = self.strip(self.sheet, (0, 54), self.size, 3)
+        self.frames_right = self.strip(self.sheet, (0, 18), self.size, 3)
+        self.frame_index = 0
+        self.missilelist = []
+        self.image = self.frames_down[self.frame_index]
+        self.rect = self.image.get_rect()
+        self.animation_speed = 200  # Milliseconds per frame
+        self.last_update = 0
+        self.pos = vec(px, py)
+        self.vel = vec(0, 0)
+        self.hit_rect = self.rect
+        self.fire_cooldown = 0
+        self.game = game
+        self.health = NME_HEALTH
+        self.direction = vec(0, 0)
+        self.angle = 270
+        self.missilelist = []
+        self.missile = None
+
+    def strip(self, sheet, start, size, columns, rows=1):
+        frames = []
+        for j in range(rows):
+            for i in range(columns):
+                location = (start[0] + size[0] * i, start[1] + size[1] * j)
+                frames.append(sheet.subsurface(pg.Rect(location, size)))
+        return frames
+
+    def animate(self):
+        now = pg.time.get_ticks()
+        if now - self.last_update > self.animation_speed:
+            self.last_update = now
+            self.frame_index = (self.frame_index + 1) % len(self.frames_down)
+            self.image = self.get_frame()
+
+    def get_frame(self):
+        if self.last_direction == NME_DICT["DOWN"]:
+            return self.frames_down[self.frame_index]
+        elif self.last_direction == NME_DICT["UP"]:
+            return self.frames_up[self.frame_index]
+        elif self.last_direction == NME_DICT["LEFT"]:
+            return self.frames_left[self.frame_index]
+        elif self.last_direction == NME_DICT["RIGHT"]:
+            return self.frames_right[self.frame_index]
+
+    def move_towards_player(self):
+        player_pos = self.game.player.pos
+        self.direction = player_pos - self.pos 
+        if self.direction.length_squared() > 0:
+            self.direction.normalize_ip()
+
+        self.vel = self.direction * NME_SPEED
+
+        # Update last_direction based on movement direction
+        if abs(self.direction.x) > abs(self.direction.y):
+            if self.direction.x > 0:
+                
+                self.last_direction = NME_DICT["RIGHT"]
+            else:
+                self.last_direction = NME_DICT["LEFT"]
+             
+        elif abs(self.direction.x) < abs(self.direction.y):
+            if self.direction.y > 0:
+                self.last_direction = NME_DICT["DOWN"]
+               
+            else:
+                self.last_direction = NME_DICT["UP"]
+               
+   
+
+       
+   
+    def fire_missile(self):
+        self.fire_cooldown -= self.game.dt
+        if self.fire_cooldown <= 0:
+            self.missile = Missile(
+                self.game,
+                self.rect.centerx,
+                self.rect.centery,
+                self.direction)
+            self.missilelist.append(self.missile)
+            self.game.all_sprites.add(self.missile)
+            self.game.screen.blit(
+                self.missile.image,
+                self.game.camera.apply(self))
+            self.fire_cooldown = FIRE_COOLDOWN
+
+    def update(self):
+        self.rect.center = self.pos
+        self.move_towards_player()
+        self.animate()
+        self.pos += self.vel * self.game.dt
+        self.rect.center = self.pos
+        self.hit_rect.center = self.rect.center
+        self.fire_cooldown -= self.game.dt  # Decrease the fire cooldown
+
+        # Check if enough time has passed to fire again
+        if self.fire_cooldown <= 0 and len(self.missilelist) < MAX_MISSILE_SHOTS:
+            self.fire_missile() 
+            self.fire_cooldown = FIRE_COOLDOWN
+
+    def draw(self):
+        self.game.screen.blit(self.image, self.game.camera.apply(self))
+
+
+class Missile(pg.sprite.Sprite):
+    def __init__(self, game, x, y, direction):
+        pg.sprite.Sprite.__init__(self, game.all_sprites)
+        self.game = game
+        self.surf = pg.Surface((16, 18)).convert_alpha()
+        self.sheet = pg.image.load("img/missile.png").convert_alpha()
+        self.size = (16, 18)
+        self.frames_down = self.strip(self.sheet, (0, 36), self.size, 3)
+        self.frames_up = self.strip(self.sheet, (0, 0), self.size, 3)
+        self.frames_left = self.strip(self.sheet, (0, 54), self.size, 3)
+        self.frames_right = self.strip(self.sheet, (0, 18), self.size, 3)
+        self.anglelist = [0, 90, 180, 270]
+        self.angle = choice(self.anglelist)
+        self.frame_iter = cycle(self.get_frames(self.angle))
+        self.image = next(self.frame_iter)
+        self.rect = pg.Rect(self.image.get_rect())
+        self.last_update = 0
+        self.rect.center = (x, y)
+        self.pos = vec(x, y)
+        self.animation_speed = 100
+        self.direction = direction
+        self.missilelist = []
+    def strip(self, sheet, start, size, columns, rows=1):
+        frames = []
+        for j in range(rows):
+            for i in range(columns):
+                location = (start[0] + size[0] * i, start[1] + size[1] * j)
+                frames.append(sheet.subsurface(pg.Rect(location, size)))
+        return frames
+
+    def get_frames(self, angle):
+        if angle == 90:
+            return self.frames_up
+        elif angle == 270:
+            return self.frames_down
+        elif angle == 180:
+            return self.frames_left
+        elif angle == 0:
+            return self.frames_right
+
+    def animate(self):
+        now = pg.time.get_ticks()
+        if now - self.last_update > self.animation_speed:
+            self.last_update = now
+            self.image = next(self.frame_iter)
+
+    def update(self):
+        self.animate()
+        if self.angle == 90:
+            self.rect.centery -= MISSILE_SPEED
+        elif self.angle == 270:
+            self.rect.centery += MISSILE_SPEED
+        elif self.angle == 180:
+            self.rect.centerx -= MISSILE_SPEED
+        elif self.angle == 0:
+            self.rect.centerx += MISSILE_SPEED
+
+        if (
+            self.rect.left < 0
+            or self.rect.right > self.game.map.width * 2
+            or self.rect.top < -100
+            or self.rect.bottom > self.game.map.height * 2
+        ):
+            self.kill()  # Remove the missile shot when it goes off-screen
+
+    def draw(self):
+        self.game.screen.blit(self.image, self.rect)
