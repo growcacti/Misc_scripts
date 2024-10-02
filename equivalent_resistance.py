@@ -22,8 +22,8 @@ def resistor_series(resistors: list[float]) -> float:
 def calculate_parallel():
     try:
         resistances = list(map(float, entry_resistors.get().split(',')))
-        result = resistor_parallel(resistances)
-        label_result_parallel.config(text=f"Equivalent Parallel Resistance: {result:.2f} Ω")
+        result = resistor_parallel(resistances)*2
+        label_result_parallel.config(text=f"Need Parallel Resistance: {result:.2f} Ω")
     except ValueError as e:
         messagebox.showerror("Input Error", str(e))
     except Exception as e:
