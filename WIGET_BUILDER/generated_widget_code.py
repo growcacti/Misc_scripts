@@ -1,0 +1,5 @@
+tk.Canvas(root, height=1, width=40, bg="LightSalmon2", bd=2, relief="raised").pack(padx=10, pady=10)
+tk.Button(root, text="new buttton", width=40, bg="LightSalmon2", bd=9).pack(padx=10, pady=10)
+tk.Button(root, text="new buttton", width=15, bg="LightSalmon2", bd=9).pack(padx=10, pady=10)
+tk.Button(root, text="new buttton", width=10, bg="LightSalmon2", bd=9).pack(padx=10, pady=10)
+tk.Listbox(root, height=1, width=10, bg="LightSalmon2", bd=9, relief="raised").pack(padx=10, pady=10)

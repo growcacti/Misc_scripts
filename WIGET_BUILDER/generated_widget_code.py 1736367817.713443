@@ -1,0 +1,1 @@
+tk.Entry(root, width=10, bg="burlywood2", bd=25).pack(padx=10, pady=10)

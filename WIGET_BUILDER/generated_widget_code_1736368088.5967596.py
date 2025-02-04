@@ -1,0 +1,1 @@
+tk.Button(root, text="btn1", width=100, bg="OliveDrab1", bd=20).pack(padx=10, pady=10)

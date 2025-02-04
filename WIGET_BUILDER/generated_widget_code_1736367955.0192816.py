@@ -1,0 +1,1 @@
+tk.Entry(root, width=10, bg="DeepSkyBlue2", bd=33).pack(padx=10, pady=10)
